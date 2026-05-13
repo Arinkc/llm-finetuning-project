@@ -102,7 +102,7 @@ def load_model_and_tokenizer(cfg: TrainingConfig, hf_token: str):
     model = AutoModelForCausalLM.from_pretrained(
         cfg.model_id,
         quantization_config=bnb_config,
-        device_map="auto",
+        device_map={"": 0},
         token=hf_token,
     )
     
