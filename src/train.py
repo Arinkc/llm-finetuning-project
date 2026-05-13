@@ -151,6 +151,14 @@ def run_training(cfg: TrainingConfig):
     model, tokenizer = load_model_and_tokenizer(cfg, hf_token)
     ds = load_and_prepare_dataset(cfg)
     
+    def formatting_func(example):
+        """Convert messages list into a tokenizable string using Llama's chat template."""
+        return tokenizer.apply_chat_template(
+            example["messages"],
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+
     sft_config = SFTConfig(
         output_dir=cfg.output_dir,
         num_train_epochs=cfg.num_train_epochs,
@@ -174,16 +182,15 @@ def run_training(cfg: TrainingConfig):
         optim="paged_adamw_8bit",
         report_to=["wandb"],
         run_name=cfg.wandb_run_name,
-        remove_unused_columns=False,
-        dataset_kwargs={"skip_prepare_dataset": False},
     )
-    
+
     trainer = SFTTrainer(
         model=model,
         args=sft_config,
         train_dataset=ds['train'],
         eval_dataset=ds['validation'],
         tokenizer=tokenizer,
+        formatting_func=formatting_func,
     )
     
     print("🚀 Starting training...")
