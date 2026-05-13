@@ -89,22 +89,35 @@ all available data.
 - Reject if doesn't start with capital letter
 - Accept if has Google section markers OR is a clean one-liner
 
-## Filter Pass Rate (1000-example sample)
 
-| Filter Stage | Pass Rate |
-|--------------|-----------|
-| No filter | 100% (1000) |
-| Length + quality only | 60.3% (603) |
-| + Google-style enforcement | 26.5% (265) |
+## Filter Calibration Iterations
 
-### Rejection Reasons (top 5)
-1. reStructuredText style (:param/:return) — 155 examples (15.5%)
-2. Not Google-style and not clean one-liner — 141 (14.1%)
-3. Too few words in docstring — 139 (13.9%)
-4. Docstring too short — 75 (7.5%)
-5. Code too long — 72 (7.2%)
+| Iteration | Pass Rate | Description |
+|-----------|-----------|-------------|
+| 1: Length + quality only | 60.3% | No style enforcement |
+| 2: + Google sections required | 26.5% | Too strict, false negatives on prose |
+| 3: + Loosened prose acceptance | 35.5% | Final — accepts Google sections OR short prose |
 
-### Projected Full Dataset Yield
-- 26.5% of 450K ≈ 119,000 examples would pass filter
-- Will sample ~20-30K from filtered pool for training (quality over volume)
-- Sampling strategy: uniform random with fixed seed for reproducibility
+### Final Filter Behavior
+Accepts a docstring if:
+- It has Google-style sections (`Args:`, `Returns:`, or `Raises:`) with valid content, OR
+- It's clean prose ≤4 lines and <400 chars
+
+Rejects:
+- Non-Google styles (JavaDoc `@param`, RST `:param`/`:rtype`/`:raises`, NumPy `Parameters\n---`)
+- Sphinx cross-references (`:py:func:`, etc.)
+- Length outliers (code <100 or >2000 chars; docs <30 or >500 chars)
+- Quality red flags (TODO/FIXME, non-capital start, >5% non-ASCII)
+- Stub docstrings (<5-8 words depending on whether sections present)
+
+### Top Rejection Reasons (1000-example sample)
+1. reStructuredText style (:param/:return): 155 (15.5%)
+2. Too few words in docstring: 139 (13.9%)
+3. Docstring too short: 75 (7.5%)
+4. Code too long: 72 (7.2%)
+5. Doesn't start with capital: 59 (5.9%)
+
+### Projected Full-Dataset Yield
+- 35.5% of ~450K ≈ **160,000 examples** would pass the filter
+- Training plan: sample **20,000-25,000** examples from filtered pool
+- Sampling: uniform random with `random_state=42` for reproducibility
