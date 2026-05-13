@@ -1,0 +1,13 @@
+{
+  "model": "Llama-3.1-8B-Instruct + LoRA (smoke test, 6 steps)",
+  "training_examples": 100,
+  "training_steps": 6,
+  "prompt": "Generate docstring for fibonacci function",
+  "output": "Compute the nth Fibonacci number.\n\n        Args:\n            n (int): The index of the Fibonacci number to compute.\n\n        Returns:\n            int: The nth Fibonacci number.\n\n        Raises:\n            ValueError: If n is a negative integer.",
+  "observations": [
+    "Concise imperative-verb summary",
+    "Proper Google-style Args/Returns/Raises sections",
+    "No markdown formatting or preamble",
+    "Clean stop (no postamble)"
+  ]
+}
