@@ -40,11 +40,36 @@ it has never seen before.
    or ties ≥70% of the time
 
 ## Project Status
-🚧 In progress — currently on Phase [15 of 12]
+🚧 In progress 
 
 ## Stack
 Python 3.10, PyTorch, Hugging Face Transformers, PEFT, TRL, BitsAndBytes, 
 Datasets, Accelerate, Weights & Biases, [vLLM or Ollama], Gradio
+
+## Dataset
+
+**Source:** [CodeSearchNet](https://huggingface.co/datasets/code-search-net/code_search_net) Python subset (412,178 raw examples)
+
+**Curation Pipeline:**
+1. Multi-criteria filter for Google-style docstrings (length bounds, style 
+   detection, quality heuristics) → 126,357 examples passed (30.66%)
+2. Random sample of 25,000 examples with `seed=42` for reproducibility
+3. AST-based docstring stripping to prevent input-output leakage 
+   → 24,970 examples after filtering structurally-invalid examples
+4. Formatted as Llama 3.1 chat conversations with system prompt
+5. Split 90/5/5 into train/validation/test
+
+**Final dataset published:** [huggingface.co/datasets/Arinkc/pydoc-llama-codesearchnet-curated](https://huggingface.co/datasets/Arinkc/pydoc-llama-codesearchnet-curated)
+
+| Split | Examples | Token Length p50 | Token Length p99 |
+|-------|----------|------------------|------------------|
+| Train | 22,473 | 201 | 514 |
+| Validation | 1,248 | — | — |
+| Test | 1,249 | — | — |
+
+The short token lengths (p99 = 514) allow training with `max_seq_length=1024`, 
+roughly halving GPU memory requirements compared to the standard 2048-token 
+training context.
 
 ## Repository Structure
 .

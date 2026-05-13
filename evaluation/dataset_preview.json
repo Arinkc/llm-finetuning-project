@@ -1,0 +1,36 @@
+{
+  "train_count": 22473,
+  "val_count": 1248,
+  "test_count": 1249,
+  "system_prompt": "You are an expert Python documentation writer. Given a Python function, generate a concise, Google-style docstring. Output only the docstring text\u2014no surrounding code, no markdown formatting, no preamble.",
+  "token_length_stats": {
+    "p50": 201,
+    "p90": 359,
+    "p99": 514,
+    "max": 799
+  },
+  "filter_stats": {
+    "raw_codesearchnet": 412178,
+    "passed_filter": 126357,
+    "filter_pass_rate": 30.66,
+    "sampled_for_training": 25000,
+    "dropped_failed_strip": 30,
+    "final_dataset_size": 24970
+  },
+  "example_train": {
+    "messages": [
+      {
+        "content": "You are an expert Python documentation writer. Given a Python function, generate a concise, Google-style docstring. Output only the docstring text\u2014no surrounding code, no markdown formatting, no preamble.",
+        "role": "system"
+      },
+      {
+        "content": "Generate a Google-style docstring for this function:\n\n```python\ndef path_to_URL(path, escape=True):\r\n    # We do not use urllib's builtin pathname2url() function since:\r\n    #  - it has been commented with 'not recommended for general use'\r\n    #  - it does not seem to work the same on Windows and non-Windows platforms\r\n    #    (result starts with /// on Windows but does not on others)\r\n    #  - urllib implementation prior to Python 2.5 used to quote ':' characters\r\n    #    as '|' which would confuse pip on Windows.\r\n    url = os.path.abspath(path)\r\n    for sep in (os.sep, os.altsep):\r\n        if sep and sep != \"/\":\r\n            url = url.replace(sep, \"/\")\r\n    if escape:\r\n        # Must not escape ':' or '/' or Python will not recognize those URLs\r\n        # correctly. Detected on Windows 7 SP1 x64 with Python 3.4.0, but doing\r\n        # this always does not hurt since both are valid ASCII characters.\r\n        no_protocol_URL = url_quote(url, safe=\":/\")\r\n    else:\r\n        no_protocol_URL = url\r\n    return \"file:///%s\" % (no_protocol_URL,)\n```",
+        "role": "user"
+      },
+      {
+        "content": "Convert a local file path to a absolute path file protocol URL.",
+        "role": "assistant"
+      }
+    ]
+  }
+}
