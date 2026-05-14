@@ -55,7 +55,7 @@ class TrainingConfig:
     weight_decay: float = 0.001
     warmup_ratio: float = 0.03
     lr_scheduler_type: str = "cosine"
-    max_seq_length: int = 768
+    max_seq_length: int = 640
     
     # Logging and evaluation
     logging_steps: int = 25
@@ -181,9 +181,8 @@ def run_training(cfg: TrainingConfig):
         save_total_limit=cfg.save_total_limit,
         bf16=True,
         fp16=False,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
-        optim="paged_adamw_8bit",
+        gradient_checkpointing=False,
+        optim="adamw_torch",
         report_to=["wandb"],
         run_name=cfg.wandb_run_name,
     )
