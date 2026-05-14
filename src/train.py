@@ -58,8 +58,8 @@ class TrainingConfig:
     max_seq_length: int = 1024
     
     # Logging and evaluation
-    logging_steps: int = 10
-    eval_steps: int = 100
+    logging_steps: int = 25
+    eval_steps: int = 200
     save_steps: int = 200
     save_total_limit: int = 2
     
