@@ -219,10 +219,12 @@ def run_training(cfg: TrainingConfig):
         run_name=cfg.wandb_run_name,
     )
 
-    from transformers import DataCollatorForLanguageModeling
-    data_collator = DataCollatorForLanguageModeling(
+    from transformers import DataCollatorForSeq2Seq
+    data_collator = DataCollatorForSeq2Seq(
         tokenizer=tokenizer,
-        mlm=False,  # causal LM, not masked LM
+        padding=True,
+        label_pad_token_id=-100,
+        return_tensors="pt",
     )
     
     trainer = SFTTrainer(
