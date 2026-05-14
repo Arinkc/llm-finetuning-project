@@ -48,14 +48,14 @@ class TrainingConfig:
     # Training hyperparameters
     output_dir: str = "/kaggle/working/checkpoints"
     num_train_epochs: int = 3
-    per_device_train_batch_size: int = 2
-    per_device_eval_batch_size: int = 2
-    gradient_accumulation_steps: int = 8
+    per_device_train_batch_size: int = 1
+    per_device_eval_batch_size: int = 1
+    gradient_accumulation_steps: int = 16
     learning_rate: float = 2e-4
     weight_decay: float = 0.001
     warmup_ratio: float = 0.03
     lr_scheduler_type: str = "cosine"
-    max_seq_length: int = 640
+    max_seq_length: int = 512
     
     # Logging and evaluation
     logging_steps: int = 25
