@@ -110,7 +110,10 @@ def load_model_and_tokenizer(cfg: TrainingConfig, hf_token: str):
         token=hf_token,
     )
     
-    model = prepare_model_for_kbit_training(model)
+    model = prepare_model_for_kbit_training(
+        model,
+        use_gradient_checkpointing=False,
+    )
     
     lora_config = LoraConfig(
         r=cfg.lora_r,
