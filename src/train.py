@@ -82,6 +82,10 @@ class TrainingConfig:
             if self.wandb_run_name is None:
                 self.wandb_run_name = f"full-run-r{self.lora_r}-lr{self.learning_rate}"
 
+    # HF Hub push
+    push_to_hub: bool = True
+    hub_repo_id: str = "Arinkc/pydoc-llama-r16-lr2e4"
+
 
 def load_model_and_tokenizer(cfg: TrainingConfig, hf_token: str):
     """Load Llama 3.1 in 4-bit and configure LoRA."""
@@ -199,6 +203,13 @@ def run_training(cfg: TrainingConfig):
     final_dir = os.path.join(cfg.output_dir, "final")
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
-    print(f"✅ Final adapter saved to {final_dir}")
-    
+    print(f"✅ Final adapter saved locally to {final_dir}")
+
+    # Push to HF Hub if not a smoke test
+    if not cfg.smoke_test and cfg.push_to_hub:
+        print(f"Pushing to {cfg.hub_repo_id}...")
+        trainer.model.push_to_hub(cfg.hub_repo_id, private=False)
+        tokenizer.push_to_hub(cfg.hub_repo_id, private=False)
+        print(f"✅ Pushed: https://huggingface.co/{cfg.hub_repo_id}")
+
     return trainer
