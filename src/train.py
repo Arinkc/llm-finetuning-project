@@ -132,8 +132,12 @@ def load_model_and_tokenizer(cfg: TrainingConfig, hf_token: str):
     return model, tokenizer
 
 
-def load_and_prepare_dataset(cfg: TrainingConfig):
-    """Load dataset from HF Hub. Subsample for smoke test if requested."""
+def load_and_prepare_dataset(cfg: TrainingConfig, tokenizer):
+    """Load dataset from HF Hub and pre-tokenize it.
+    
+    Pre-tokenizing here (rather than letting SFTTrainer do it lazily) avoids
+    re-tokenization on every training step.
+    """
     print(f"Loading dataset: {cfg.dataset_id}")
     ds = load_dataset(cfg.dataset_id)
     
@@ -142,9 +146,34 @@ def load_and_prepare_dataset(cfg: TrainingConfig):
         ds['train'] = ds['train'].shuffle(seed=42).select(range(100))
         ds['validation'] = ds['validation'].shuffle(seed=42).select(range(50))
     
-    print(f"   Train: {len(ds['train']):,}")
-    print(f"   Validation: {len(ds['validation']):,}")
-    return ds
+    def tokenize_fn(example):
+        text = tokenizer.apply_chat_template(
+            example["messages"],
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+        result = tokenizer(
+            text,
+            truncation=True,
+            max_length=cfg.max_seq_length,
+            padding=False,
+        )
+        result["labels"] = result["input_ids"].copy()
+        return result
+    
+    print("Pre-tokenizing dataset...")
+    tokenized = {}
+    for split in ['train', 'validation']:
+        tokenized[split] = ds[split].map(
+            tokenize_fn,
+            remove_columns=ds[split].column_names,
+            num_proc=4,
+            desc=f"Tokenizing {split}",
+        )
+    
+    print(f"   Train: {len(tokenized['train']):,}")
+    print(f"   Validation: {len(tokenized['validation']):,}")
+    return tokenized
 
 
 def run_training(cfg: TrainingConfig):
@@ -156,7 +185,7 @@ def run_training(cfg: TrainingConfig):
     os.environ["WANDB_PROJECT"] = cfg.wandb_project
     
     model, tokenizer = load_model_and_tokenizer(cfg, hf_token)
-    ds = load_and_prepare_dataset(cfg)
+    ds = load_and_prepare_dataset(cfg, tokenizer)  # now needs tokenizer
     
     def formatting_func(example):
         """Convert messages list into a tokenizable string using Llama's chat template."""
@@ -190,13 +219,19 @@ def run_training(cfg: TrainingConfig):
         run_name=cfg.wandb_run_name,
     )
 
+    from transformers import DataCollatorForLanguageModeling
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,  # causal LM, not masked LM
+    )
+    
     trainer = SFTTrainer(
         model=model,
         args=sft_config,
         train_dataset=ds['train'],
         eval_dataset=ds['validation'],
         tokenizer=tokenizer,
-        formatting_func=formatting_func,
+        data_collator=data_collator,
     )
     
     print("🚀 Starting training...")
