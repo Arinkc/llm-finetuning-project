@@ -46,16 +46,16 @@ class TrainingConfig:
     )
     
     # Training hyperparameters
-    output_dir: str = "/kaggle/working/checkpoints"
+    output_dir: str = "/tmp/checkpoints"
     num_train_epochs: int = 3
-    per_device_train_batch_size: int = 2
-    per_device_eval_batch_size: int = 2
-    gradient_accumulation_steps: int = 8
+    per_device_train_batch_size: int = 8
+    per_device_eval_batch_size: int = 8
+    gradient_accumulation_steps: int = 2
     learning_rate: float = 2e-4
     weight_decay: float = 0.001
     warmup_ratio: float = 0.03
     lr_scheduler_type: str = "cosine"
-    max_seq_length: int = 640
+    max_seq_length: int = 1024
     
     # Logging and evaluation
     logging_steps: int = 25
@@ -66,7 +66,11 @@ class TrainingConfig:
     # W&B
     wandb_project: str = "pydoc-llama"
     wandb_run_name: Optional[str] = None
-    
+
+    # HF Hub push
+    push_to_hub: bool = True
+    hub_repo_id: str = "Arinkc/pydoc-llama-r16-full"
+
     # Smoke test mode
     smoke_test: bool = False  # If True, uses 100 examples, 50 steps
     
@@ -82,9 +86,6 @@ class TrainingConfig:
             if self.wandb_run_name is None:
                 self.wandb_run_name = f"full-run-r{self.lora_r}-lr{self.learning_rate}"
 
-    # HF Hub push
-    push_to_hub: bool = True
-    hub_repo_id: str = "Arinkc/pydoc-llama-r16-lr2e4"
 
 
 def load_model_and_tokenizer(cfg: TrainingConfig, hf_token: str):
@@ -185,15 +186,15 @@ def run_training(cfg: TrainingConfig):
     os.environ["WANDB_PROJECT"] = cfg.wandb_project
     
     model, tokenizer = load_model_and_tokenizer(cfg, hf_token)
-    ds = load_and_prepare_dataset(cfg, tokenizer)  # now needs tokenizer
+    ds = load_and_prepare_dataset(cfg, tokenizer)
     
-    def formatting_func(example):
-        """Convert messages list into a tokenizable string using Llama's chat template."""
-        return tokenizer.apply_chat_template(
-            example["messages"],
-            tokenize=False,
-            add_generation_prompt=False,
-        )
+    from transformers import DataCollatorForSeq2Seq
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        padding=True,
+        label_pad_token_id=-100,
+        return_tensors="pt",
+    )
 
     sft_config = SFTConfig(
         output_dir=cfg.output_dir,
@@ -205,7 +206,6 @@ def run_training(cfg: TrainingConfig):
         weight_decay=cfg.weight_decay,
         warmup_ratio=cfg.warmup_ratio,
         lr_scheduler_type=cfg.lr_scheduler_type,
-        max_seq_length=cfg.max_seq_length,
         logging_steps=cfg.logging_steps,
         eval_strategy="steps",
         eval_steps=cfg.eval_steps,
@@ -213,21 +213,12 @@ def run_training(cfg: TrainingConfig):
         save_total_limit=cfg.save_total_limit,
         bf16=True,
         fp16=False,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},   # add this line back
+        gradient_checkpointing=False,
         optim="adamw_torch",
         report_to=["wandb"],
         run_name=cfg.wandb_run_name,
     )
 
-    from transformers import DataCollatorForSeq2Seq
-    data_collator = DataCollatorForSeq2Seq(
-        tokenizer=tokenizer,
-        padding=True,
-        label_pad_token_id=-100,
-        return_tensors="pt",
-    )
-    
     trainer = SFTTrainer(
         model=model,
         args=sft_config,
@@ -245,7 +236,6 @@ def run_training(cfg: TrainingConfig):
     tokenizer.save_pretrained(final_dir)
     print(f"✅ Final adapter saved locally to {final_dir}")
 
-    # Push to HF Hub if not a smoke test
     if not cfg.smoke_test and cfg.push_to_hub:
         print(f"Pushing to {cfg.hub_repo_id}...")
         trainer.model.push_to_hub(cfg.hub_repo_id, private=False)
