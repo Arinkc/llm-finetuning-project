@@ -48,9 +48,9 @@ class TrainingConfig:
     # Training hyperparameters
     output_dir: str = "/tmp/checkpoints"
     num_train_epochs: int = 3
-    per_device_train_batch_size: int = 8
-    per_device_eval_batch_size: int = 8
-    gradient_accumulation_steps: int = 2
+    per_device_train_batch_size: int = 4
+    per_device_eval_batch_size: int = 4
+    gradient_accumulation_steps: int = 4
     learning_rate: float = 2e-4
     weight_decay: float = 0.001
     warmup_ratio: float = 0.03
@@ -197,6 +197,7 @@ def run_training(cfg: TrainingConfig):
     )
 
     sft_config = SFTConfig(
+        max_seq_length=cfg.max_seq_length,
         output_dir=cfg.output_dir,
         num_train_epochs=cfg.num_train_epochs,
         per_device_train_batch_size=cfg.per_device_train_batch_size,
