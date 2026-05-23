@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Hallucination prevention",
+    "function": "def cipher(self):\n    if not self._handshake_done:\n        return\n    current_cipher = SSL_get_current_cipher(self._ssl.value)\n    cipher_name = SSL_CIPHER_get_name(current_cipher)\n    cipher_version = SSL_CIPHER_get_version(current_cipher)\n    cipher_bits = SSL_CIPHER_get_bits(current_cipher)\n    return cipher_name, cipher_version, cipher_bits",
+    "base_output": "Returns the current SSL cipher details.\n\nReturns:\n    tuple: A tuple containing the cipher name, version, and bits.\n\nRaises:\n    ValueError: If the handshake is not complete.\n\nNote:\n    This function is intended for internal use and should not be called directly.",
+    "finetuned_output": "Returns the current cipher suite used in this connection.",
+    "reference": "Retrieve information about the current cipher",
+    "why": "Base model fabricates 'ValueError: If the handshake is not complete' — this exception is never raised in the code. Fine-tuned model produces one accurate sentence with no hallucination.",
+    "verdict": "fine-tuned wins"
+  },
+  {
+    "name": "Appropriate structured output",
+    "function": "def Items(self, key):\n    with self._mutex:\n      if key not in self._buckets:\n        raise KeyError('Key %s was not found in Reservoir' % key)\n      bucket = self._buckets[key]\n    return bucket.Items()",
+    "base_output": "Returns the items in the bucket associated with the given key.\n\nRaises:\n    KeyError: If the key is not found in the reservoir.\n\nNote: This function is thread-safe due to the use of the `_mutex` lock.",
+    "finetuned_output": "Returns a list of all items in the Reservoir associated with the specified key.\n\nArgs:\n  key: The key to retrieve items for.\n\nReturns:\n  A list of all items in the Reservoir associated with the specified key.\n\nRaises:\n  KeyError: If the specified key is not in the Reservoir.",
+    "reference": "Return items associated with given key.\n\nArgs:\n  key: The key for which we are finding associated items.\n\nRaises:\n  KeyError: If the key is not found in the reservoir.\n\nReturns:",
+    "why": "For a complex function with arguments and a documented exception, the fine-tuned model correctly produces full Args/Returns/Raises sections matching the reference. Shows the model learned when structure is appropriate.",
+    "verdict": "fine-tuned wins"
+  },
+  {
+    "name": "Avoiding pointless verbosity",
+    "function": "def createPitchMarkers(self):\n    self.pitchPatches = []\n    for i in [-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9]:\n        width = self.calcPitchMarkerWidth(i)\n        currPatch = patches.Rectangle((-width/2.0,self.dist10deg*i-(self.thick/2.0)),width,self.thick,facecolor='w',edgecolor='none')\n        self.axes.add_patch(currPatch)",
+    "base_output": "Creates pitch markers on the plot, including major lines at multiples of 10 degrees and labels at 30-degree intervals.\n\nArgs:\n    None\n\nReturns:\n    None\n\nNotes:\n    This method modifies the plot by adding pitch markers and labels.",
+    "finetuned_output": "Create pitch marker lines and labels on axes",
+    "reference": "Creates the rectangle patches for the pitch indicators.",
+    "why": "Base model writes 'Args: None, Returns: None' — technically correct but adds no value. Fine-tuned writes a useful one-liner. For a no-argument void method, conciseness is correct.",
+    "verdict": "fine-tuned wins"
+  }
+]
