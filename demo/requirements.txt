@@ -1,1 +1,6 @@
-huggingface_hub>=0.20.0
+transformers>=4.45.0
+peft>=0.13.0
+bitsandbytes
+accelerate
+sentencepiece
+torch

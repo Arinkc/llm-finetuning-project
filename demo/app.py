@@ -1,6 +1,9 @@
 import os
+import torch
 import gradio as gr
-from huggingface_hub import InferenceClient
+from transformers import pipeline, AutoTokenizer
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
 MODEL_ID = "Arinkc/pydoc-llama-r16-merged"
 
@@ -34,15 +37,33 @@ EXAMPLES = [
     "def merge_dicts(dict1, dict2, overwrite=True):\n    result = dict1.copy()\n    for key, value in dict2.items():\n        if key not in result or overwrite:\n            result[key] = value\n    return result",
 ]
 
-client = InferenceClient(
-    model=MODEL_ID,
-    token=os.environ.get("HF_TOKEN", None),
+HF_TOKEN = os.environ.get("HF_TOKEN", None)
+
+print("Loading tokenizer...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=HF_TOKEN)
+
+print("Loading model...")
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True,
 )
+
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID,
+    quantization_config=bnb_config,
+    device_map="auto",
+    token=HF_TOKEN,
+)
+model.eval()
+print("Model loaded.")
 
 
 def generate_docstring(function_code: str) -> str:
     if not function_code.strip():
         return "Please enter a Python function."
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -50,15 +71,28 @@ def generate_docstring(function_code: str) -> str:
             "content": f"Generate a Google-style docstring for this function:\n\n```python\n{function_code}\n```",
         },
     ]
-    try:
-        response = client.chat_completion(
-            messages=messages,
-            max_tokens=200,
-            temperature=0.1,
+
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        return_tensors="pt",
+    ).to(model.device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs,
+            max_new_tokens=200,
+            do_sample=False,
+            pad_token_id=tokenizer.eos_token_id,
+            temperature=1.0,
         )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error: {str(e)}\n\nThe model may still be loading. Please try again in 30 seconds."
+
+    response = tokenizer.decode(
+        outputs[0][inputs.shape[1]:],
+        skip_special_tokens=True,
+    ).strip()
+
+    return response
 
 
 with gr.Blocks(title="PyDocLlama") as demo:
@@ -73,13 +107,17 @@ with gr.Blocks(title="PyDocLlama") as demo:
             )
             with gr.Row():
                 clear_btn = gr.Button("Clear", variant="secondary")
-                generate_btn = gr.Button("Generate Docstring ✨", variant="primary")
+                generate_btn = gr.Button(
+                    "Generate Docstring ✨",
+                    variant="primary",
+                )
 
         with gr.Column(scale=1):
             output = gr.Textbox(
                 label="Generated Docstring",
                 lines=15,
                 max_lines=30,
+                show_copy_button=True,
             )
 
     with gr.Accordion("Examples — click to load", open=False):
@@ -93,7 +131,7 @@ with gr.Blocks(title="PyDocLlama") as demo:
 ---
 **About:** Fine-tuned Llama 3.1 8B with QLoRA on an A100 GPU.
 Training loss: 2.3 → 0.63 over 4,212 steps.
-First request may take ~30s to warm up while the model loads.
+Generation may take 30-60 seconds on CPU.
     """)
 
     generate_btn.click(
