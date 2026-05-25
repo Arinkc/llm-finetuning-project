@@ -1,3 +1,7 @@
+# Note: Full deployment requires GPU inference (A10G or better).
+# Free HF Spaces CPU tier (16GB RAM) is insufficient for Llama 3.1 8B.
+# Production deployment would use vLLM with an HF Inference Endpoint
+# or Modal for GPU-backed serving.
 import os
 import torch
 import gradio as gr
