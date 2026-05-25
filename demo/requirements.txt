@@ -1,6 +1,7 @@
-transformers>=4.45.0
-peft>=0.13.0
-bitsandbytes
-accelerate
-sentencepiece
+gradio>=4.0.0
 torch
+transformers
+accelerate
+peft
+sentencepiece
+safetensors

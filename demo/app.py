@@ -1,16 +1,19 @@
 import os
 import torch
 import gradio as gr
-from transformers import pipeline, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
-MODEL_ID = "Arinkc/pydoc-llama-r16-merged"
+BASE_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+ADAPTER_ID = "Arinkc/pydoc-llama-r16-full"
+
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 SYSTEM_PROMPT = (
-    "You are an expert Python documentation writer. Given a Python function, "
-    "generate a concise, Google-style docstring. Output only the docstring "
-    "text—no surrounding code, no markdown formatting, no preamble."
+    "You are an expert Python documentation writer. "
+    "Given a Python function, generate a concise, "
+    "Google-style docstring. Output only the docstring "
+    "text with no markdown, no code fences, and no explanation."
 )
 
 DESCRIPTION = """
@@ -18,130 +21,180 @@ DESCRIPTION = """
 
 Generate Google-style Python docstrings using a fine-tuned Llama 3.1 8B model.
 
-**Model:** [Arinkc/pydoc-llama-r16-full](https://huggingface.co/Arinkc/pydoc-llama-r16-full)
+**Model:** Arinkc/pydoc-llama-r16-full  
 Fine-tuned with QLoRA on 22,473 curated Python function/docstring pairs.
 
-**Key improvements over base model (200 held-out test examples):**
-- Hallucinated exceptions eliminated: 11% → 0%
-- Verbose outputs eliminated: 19.5% → 0%
+### Key Improvements Over Base Model
+- Hallucinated exceptions: 11% → 0%
+- Verbose outputs: 19.5% → 0%
 - Format compliance: 80.5% → 100%
 
-[GitHub](https://github.com/arinkc/llm-finetuning-project) |
-[Dataset](https://huggingface.co/datasets/Arinkc/pydoc-llama-codesearchnet-curated) |
-[Model](https://huggingface.co/Arinkc/pydoc-llama-r16-full)
+⚠️ Running on free CPU hardware.  
+First startup may take several minutes.  
+Generation may take 30–90 seconds.
 """
 
-EXAMPLES = [
-    "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1",
-    "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)",
-    "def merge_dicts(dict1, dict2, overwrite=True):\n    result = dict1.copy()\n    for key, value in dict2.items():\n        if key not in result or overwrite:\n            result[key] = value\n    return result",
-]
-
-HF_TOKEN = os.environ.get("HF_TOKEN", None)
-
 print("Loading tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=HF_TOKEN)
 
-print("Loading model...")
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-)
-
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID,
-    quantization_config=bnb_config,
-    device_map="auto",
+tokenizer = AutoTokenizer.from_pretrained(
+    BASE_MODEL_ID,
     token=HF_TOKEN,
 )
+
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+print("Loading base model... this may take several minutes.")
+
+base_model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL_ID,
+    torch_dtype=torch.float32,
+    device_map="cpu",
+    low_cpu_mem_usage=True,
+    token=HF_TOKEN,
+)
+
+print("Loading LoRA adapter...")
+
+model = PeftModel.from_pretrained(
+    base_model,
+    ADAPTER_ID,
+    token=HF_TOKEN,
+)
+
 model.eval()
-print("Model loaded.")
+
+print("✅ Model loaded successfully")
 
 
 def generate_docstring(function_code: str) -> str:
+    """Generate a Google-style Python docstring."""
+
     if not function_code.strip():
         return "Please enter a Python function."
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        },
         {
             "role": "user",
-            "content": f"Generate a Google-style docstring for this function:\n\n```python\n{function_code}\n```",
+            "content": (
+                "Generate a Google-style docstring for this function:\n\n"
+                f"```python\n{function_code}\n```"
+            ),
         },
     ]
 
-    inputs = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        return_tensors="pt",
-    ).to(model.device)
-
-    with torch.no_grad():
-        outputs = model.generate(
-            inputs,
-            max_new_tokens=200,
-            do_sample=False,
-            pad_token_id=tokenizer.eos_token_id,
-            temperature=1.0,
+    try:
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
         )
 
-    response = tokenizer.decode(
-        outputs[0][inputs.shape[1]:],
-        skip_special_tokens=True,
-    ).strip()
+        with torch.no_grad():
+            outputs = model.generate(
+                inputs,
+                max_new_tokens=200,
+                do_sample=False,
+                temperature=1.0,
+                pad_token_id=tokenizer.eos_token_id,
+            )
 
-    return response
+        response = tokenizer.decode(
+            outputs[0][inputs.shape[1]:],
+            skip_special_tokens=True,
+        ).strip()
+
+        return response
+
+    except Exception as e:
+        return f"Generation failed:\n\n{str(e)}"
 
 
 with gr.Blocks(title="PyDocLlama") as demo:
+
     gr.Markdown(DESCRIPTION)
 
     with gr.Row():
+
         with gr.Column(scale=2):
+
             code_input = gr.Textbox(
                 label="Python Function",
-                lines=15,
+                lines=18,
                 max_lines=30,
             )
+
             with gr.Row():
-                clear_btn = gr.Button("Clear", variant="secondary")
+
+                clear_btn = gr.Button(
+                    "Clear",
+                    variant="secondary",
+                )
+
                 generate_btn = gr.Button(
                     "Generate Docstring ✨",
                     variant="primary",
                 )
 
         with gr.Column(scale=1):
+
             output = gr.Textbox(
                 label="Generated Docstring",
-                lines=15,
+                lines=18,
                 max_lines=30,
-                show_copy_button=True,
             )
 
-    with gr.Accordion("Examples — click to load", open=False):
-        for example in EXAMPLES:
-            gr.Button(example[:60] + "...").click(
-                fn=lambda e=example: e,
-                outputs=code_input,
-            )
+    gr.Markdown(
+        """
+## Example Function
 
-    gr.Markdown("""
----
-**About:** Fine-tuned Llama 3.1 8B with QLoRA on an A100 GPU.
-Training loss: 2.3 → 0.63 over 4,212 steps.
-Generation may take 30-60 seconds on CPU.
-    """)
+```python
+def binary_search(arr, target):
+    left, right = 0, len(arr) - 1
 
-    generate_btn.click(
-        fn=generate_docstring,
-        inputs=code_input,
-        outputs=output,
-    )
-    clear_btn.click(
-        fn=lambda: ("", ""),
-        outputs=[code_input, output],
-    )
+    while left <= right:
+        mid = (left + right) // 2
+
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return -1
+"""
+)
+    gr.Markdown(
+        """
+About This Project
+
+PyDocLlama was fine-tuned using QLoRA on an NVIDIA A100 GPU.
+
+Training:
+
+22,473 curated Python examples
+LoRA rank: 16
+4-bit NF4 quantization
+Final training loss: 0.63
+
+This demo runs entirely on free CPU hardware for public access.
+"""
+)
+
+generate_btn.click(
+    fn=generate_docstring,
+    inputs=code_input,
+    outputs=output,
+)
+
+clear_btn.click(
+    fn=lambda: ("", ""),
+    outputs=[code_input, output],
+)
 
 demo.launch()
